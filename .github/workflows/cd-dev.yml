@@ -1,0 +1,40 @@
+name: CD - Deploy to Dev (AKS)
+on:
+  push:
+    branches: [ develop ]
+    paths:
+      - "k8s/**"
+      - ".github/workflows/**"
+  workflow_dispatch: {}
+
+env:
+  RESOURCE_GROUP: YOUR_AKS_RG
+  AKS_CLUSTER: YOUR_AKS_NAME
+  NAMESPACE: dev
+  ACR: YOUR_ACR_NAME.azurecr.io
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC) - fill secrets later
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_CLUSTER --overwrite-existing
+
+      - name: Create namespace if missing
+        run: kubectl create ns $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy manifests (fallback)
+        run: kubectl -n $NAMESPACE apply -f k8s/

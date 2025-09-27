@@ -1,0 +1,55 @@
+name: Reusable - Build & Scan & (optional) Push
+on:
+  workflow_call:
+    inputs:
+      service_name: {required: true, type: string}
+      context: {required: true, type: string}
+      dockerfile: {required: true, type: string}
+      image: {required: true, type: string}
+      push: {required: true, type: boolean}
+    secrets:
+      ACR_LOGIN_SERVER: { required: false }
+jobs:
+  build:
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry (optional for now)
+        if: ${{ inputs.push && secrets.ACR_LOGIN_SERVER != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+
+      - name: Compute tags
+        id: vars
+        run: |
+          echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF_NAME//\//-}" >> $GITHUB_OUTPUT
+
+      - name: Build image (no push in CI)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: ${{ inputs.push }}
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image }}:${{ steps.vars.outputs.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.image }}:${{ steps.vars.outputs.branch }}
+
+      - name: Trivy scan (non-blocking for now)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          path: ${{ inputs.context }}
+          format: 'table'
+          exit-code: '0'   # change to 1 later to fail on vulns
+          severity: 'CRITICAL,HIGH'

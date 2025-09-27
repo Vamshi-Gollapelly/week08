@@ -1,0 +1,33 @@
+name: CD - Deploy to Prod (AKS)
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "k8s/**"
+      - ".github/workflows/**"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: prod
+      url: https://YOUR_PROD_URL
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        run: az aks get-credentials -g ${{ secrets.AKS_RG }} -n ${{ secrets.AKS_NAME }} --overwrite-existing
+
+      - name: Deploy manifests
+        run: kubectl -n prod apply -f k8s/
