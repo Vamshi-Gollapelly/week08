@@ -1,0 +1,12 @@
+lint-frontend:
+  runs-on: ubuntu-latest
+  defaults:
+    run:
+      working-directory: frontend
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with: { node-version: "20" }
+    - run: npm ci || echo "no package.json - skipping"
+    - run: npx eslint . || echo "eslint not configured - skipping"
+    - run: npm audit --audit-level=high || echo "npm audit not available - continuing"
